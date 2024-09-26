@@ -4,5 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.88"
+eframe = "0.28.1"
 rust_decimal = "1.36.0"
+
+
