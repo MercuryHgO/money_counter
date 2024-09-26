@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use eframe::{egui::{CentralPanel, TextBuffer}, Result};
 use money::{Money, Unit};
 use rust_decimal::{prelude::FromPrimitive, Decimal};
