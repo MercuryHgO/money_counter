@@ -1,113 +1,11 @@
-use std::{char, str::FromStr};
+use std::str::FromStr;
+
 
 use eframe::egui;
-use egui::{FontData, TextBuffer};
+use egui::TextBuffer;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 
-#[derive(
-    Debug,
-    PartialEq, Eq, PartialOrd, Ord,
-    Clone, Copy
-)]
-pub struct Unit(pub u128);
-
-impl Unit {
-    pub fn pronounce(&self) -> String {
-        let pronounce: &'static str = match self.0 % 10 {
-            1 if self.0 % 100 != 11 => "единицу",
-            2..=4 if !(self.0 % 100 >= 12 && self.0 % 100 <= 14) => "единицы",
-            _ => "единиц"
-        };
-        format!("{} {}", self.0, pronounce)
-    }
-}
-
-impl std::ops::Add for Unit {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
-    }
-}
-
-impl std::ops::Sub for Unit {
-    type Output = Self;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Self(self.0 - rhs.0)
-    }
-}
-
-impl std::ops::Mul for Unit {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        Self(self.0 * rhs.0)
-    }
-}
-
-impl std::ops::Div for Unit {
-    type Output = Self;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        Self(self.0 / rhs.0)
-    }
-}
-
-impl std::fmt::Display for Unit {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",self.pronounce())
-    }
-}
-
-impl From<&Unit> for Decimal {
-    fn from(value: &Unit) -> Self {
-        Decimal::from_parts(
-            (value.0 & 0xFFFFFFFF) as u32,
-            ((value.0 >> 32) & 0xFFFFFFFF) as u32,
-            ((value.0 >> 64) & 0xFFFFFFFF) as u32,
-            false,
-        0)
-    }
-}
-
-impl TextBuffer for Unit {
-    fn is_mutable(&self) -> bool {
-        true
-    }
-
-    fn as_str(&self) -> &str {
-        let formatted = format!("{}",self.0);
-        Box::leak(formatted.into_boxed_str())
-    }
-
-    fn insert_text(&mut self, text: &str, char_index: usize) -> usize {
-        let current_string = self.0.to_string();
-        let mut new_string = String::new();
-
-        new_string.push_str(&current_string[..char_index]);
-        new_string.push_str(text);
-        new_string.push_str(&current_string[char_index..]);
-
-        match u128::from_str(&new_string) {
-            Ok(v) => {
-                self.0 = v;
-                new_string.len() - current_string.len()
-            },
-            Err(_) => 0,
-        }
-    }
-
-    fn delete_char_range(&mut self, char_range: std::ops::Range<usize>) {
-        let mut original_str = self.0.to_string();
-        original_str.delete_char_range(char_range);
-
-        match u128::from_str(&original_str) {
-            Ok(v) => self.0 = v,
-            Err(_) => (),
-        }
-    }
-}
+use crate::unit::Unit;
 
 #[derive(Debug,
     PartialEq, Eq, PartialOrd, Ord,

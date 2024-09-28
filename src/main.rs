@@ -1,9 +1,10 @@
 #![windows_subsystem = "windows"]
-use eframe::{egui::{CentralPanel, TextBuffer}, Result};
+use eframe::egui::CentralPanel;
 use money::{Money, Unit};
-use rust_decimal::{prelude::FromPrimitive, Decimal};
+use rust_decimal::Decimal;
 
 mod money;
+mod unit;
 
 struct MyApp {
     budget: Money,
