@@ -1,54 +1,136 @@
-use std::str::FromStr;
+use std::{str::FromStr, u128};
 
 
 use eframe::egui;
 use egui::TextBuffer;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 
-use crate::unit::Unit;
+use crate::{pronounce::{NumberPronouce, Triplet}, unit::Unit};
 
 #[derive(Debug,
     PartialEq, Eq, PartialOrd, Ord,
     Clone, Copy)]
 pub struct Money(pub Decimal);
 
+type MoneyDecomposed = (u128,u8);
+
 impl Money {
     pub fn abs(&self) -> Self {
         Money(self.0.abs())
     }
 
-    fn pronounce(&self) -> core::result::Result<String, std::fmt::Error> {
-        let integer_amount: u128 = self.0.trunc()
-            .try_into()
-            .map_err(|_| std::fmt::Error)?;
+    fn decompose(&self) -> MoneyDecomposed {
+        let unpacked = self.0.fract().unpack();
+        let unpacked_trunc = self.0.trunc().unpack();
 
-        let rubles_pronounce: &'static str = match integer_amount % 10 {
-            1 if integer_amount % 100 != 11 => "рубль",
-            2..=4 if !(integer_amount % 100 >= 12 && integer_amount % 100 <= 14) => "рубля",
-            _ => "рублей"
-        };
+        let rubles: u128 = ((unpacked_trunc.hi as u128) << 64) |
+            ((unpacked_trunc.mid as u128) << 32) |
+            ((unpacked_trunc.lo) as u128);
+        let mut kopek: u8 = unpacked.lo as u8;
+        if unpacked.scale == 1 { kopek *= 10; }
 
-        if self.0.is_integer() {
-            Ok(format!("{} {}",integer_amount, rubles_pronounce))
-        } else {
-            let unwrapped_fraction = self.0.fract().unpack();
-            let fraction_amount: u8 = Decimal::from_parts(
-                unwrapped_fraction.lo, 0, 0, false, 0)
-                .try_into()
-                .map_err(|_| std::fmt::Error)?;
-
-            let kopek_pronounce: &'static str = match fraction_amount % 10 {
-                1 if fraction_amount % 100 != 11 => "копейка",
-                2..=4 if !(fraction_amount % 100 >= 12 && fraction_amount % 100 <= 14) => "копейки",
-                _ => "копеек"
-            };
-
-
-            Ok(format!("{} {} {} {}",integer_amount, rubles_pronounce, fraction_amount, kopek_pronounce))
-        }
+        (rubles,kopek)
     }
 }
 
+impl NumberPronouce for MoneyDecomposed {
+    fn into_triplets(&self) -> Vec<crate::pronounce::Triplet> {
+        let mut triplets: Vec<Triplet> = Vec::new();
+
+        let mut rubles_str = self.0.to_string();
+
+        match rubles_str.chars().count() % 3 {
+            1 => rubles_str.insert_str(0,"00"),
+            2 => rubles_str.insert_str(0,"0"),
+            _ => ()
+        }
+
+        let mut kopek_slice: [u8;3] = [0u8;3];
+        let mut kopek_string = "0".to_string();
+
+        match self.1 {
+            1..10 => { kopek_string.push('0'); kopek_string.push_str(&self.1.to_string())},
+            10..100 => { kopek_string.push_str(&self.1.to_string())},
+            _ => ()
+        }
+
+        for (i,char) in kopek_string.into_bytes().iter().enumerate() {
+            kopek_slice[i] = *char;
+        }
+        
+
+        let rubles_str_triplets: Vec<[u8;3]> = rubles_str
+            .as_bytes()
+            .chunks(3)
+            .map(
+                |chunk| {
+                    let mut triplet = [0u8;3];
+                    for (i,byte) in chunk.iter().enumerate() {
+                        triplet[i] = *byte
+                    };
+                    triplet
+                }
+            )
+            .rev()
+            .collect();
+
+        for (i,triplet) in rubles_str_triplets.iter().enumerate() {
+            triplets.push(
+                Triplet::new(*triplet,i)
+            )
+        };
+
+              
+        triplets.push(
+            Triplet::new(
+                kopek_slice, 0 )
+        );
+
+        triplets
+    }
+
+    fn pronounce(&self) -> String {
+        let mut result = String::new();
+        let mut kopek_result = String::new();
+
+        let mut triplets = self.into_triplets();
+        if self.1 != 0 {
+            if let Some(kopek) = &triplets.pop() {
+                kopek_result.push_str(&kopek.into_feminie().pronounce());
+                kopek_result.push_str(
+                    &kopek.triplet_pronounce(
+                        ["копейка", "копейки", "копеек"]
+                    )
+                );
+            };
+        }
+
+        triplets
+            .iter()
+            .rev()
+            .for_each( |triplet| {
+                result.push_str(&triplet.pronounce());
+                result.push(' ');
+            });
+
+        if let Some(triplet) = triplets.first() {
+            result.push_str(
+                triplet.triplet_pronounce(
+                    ["рубль", "рубля", "рублей"]
+                )
+            );
+        }
+
+        result.push(' ');
+
+        result.push_str(&kopek_result);
+
+
+        result
+    }
+
+    
+}
 
 impl std::ops::Add for Money {
     type Output = Self;
@@ -137,7 +219,7 @@ impl TryFrom<Decimal> for Money {
 
 impl std::fmt::Display for Money {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.pronounce()?)
+        write!(f, "{}", self.decompose().pronounce())
     }
 }
 
